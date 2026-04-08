@@ -1,0 +1,47 @@
+# postgres service configuration
+# secrets managed via environment variables
+# named volume defined to ensure persistence after stops and restarts
+# configured with healthcheck
+services: 
+  postgres: 
+    image: postgres:15 
+    environment: 
+      POSTGRES_USER: ${DB_USER:-user} 
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password} 
+      POSTGRES_DB: ${DB_NAME:-ordersmgmt} 
+    volumes: 
+      - postgres_data:/var/lib/postgresql/data 
+    healthcheck: 
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"] 
+      interval: 5s 
+      timeout: 5s 
+      retries: 5 
+
+  # builds image from Dockerfile
+  # connects to postgres service
+  # prints logs rather than buffering them
+  # flask app does not start until postgres satisfies health check
+  api: 
+    build: . 
+    ports: 
+      - "8080:8080" 
+    # volumes:
+    #  - .:/app
+    environment: 
+    # fix to ensure that db host/user/password/dbname are env-driven
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_NAME=${DB_NAME:-ordersmgmt}
+      # Constructing the URL using the env-driven values
+      - DATABASE_URL=postgresql://${DB_USER:-user}:${DB_PASSWORD:-password}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-ordersmgmt}
+      - FLASK_APP=main.py
+      - PYTHONUNBUFFERED=1
+    depends_on: 
+      postgres: 
+        condition: service_healthy 
+
+# defines postgres volume as postgres_data
+volumes: 
+  postgres_data:
